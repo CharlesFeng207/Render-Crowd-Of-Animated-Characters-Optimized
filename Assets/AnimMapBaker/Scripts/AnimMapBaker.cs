@@ -193,9 +193,10 @@ public class AnimMapBaker{
 
             _animData.Value.SampleAnimAndBakeMesh(ref _bakedMesh);
 
+            var vertices = _bakedMesh.vertices;
             for(var j = 0; j < _bakedMesh.vertexCount; j++)
             {
-                var vertex = _bakedMesh.vertices[j];
+                var vertex = vertices[j];
                 animMap.SetPixel(j, i, new Color(vertex.x, vertex.y, vertex.z));
             }
 
