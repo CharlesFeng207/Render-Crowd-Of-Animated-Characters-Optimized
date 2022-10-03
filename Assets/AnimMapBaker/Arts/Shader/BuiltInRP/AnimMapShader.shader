@@ -10,6 +10,8 @@ Shader "chenjd/BuiltIn/AnimMapShader"
 		_MainTex ("Texture", 2D) = "white" {}
 		_AnimMap ("AnimMap", 2D) ="white" {}
 		_AnimLen("Anim Length", Float) = 0
+		_PosRegionStart("PosRegionStart", Vector) = (0, 0, 0, 0)
+		_PosRegionEnd("PosRegionEnd", Vector) = (0, 0, 0, 0)
 	}
 	
     SubShader
@@ -25,6 +27,7 @@ Shader "chenjd/BuiltIn/AnimMapShader"
             #pragma fragment frag
             //开启gpu instancing
             #pragma multi_compile_instancing
+            #pragma multi_compile _ TEXTURE_COMPRESSION
 
             #include "UnityCG.cginc"
 
@@ -50,20 +53,22 @@ Shader "chenjd/BuiltIn/AnimMapShader"
 
             float _AnimLen;
 
-            
+#if TEXTURE_COMPRESSION
+            float3 _PosRegionStart;
+            float3 _PosRegionEnd;
+#endif
             v2f vert (appdata v, uint vid : SV_VertexID)
             {
                 UNITY_SETUP_INSTANCE_ID(v);
 
-                float f = _Time.y / _AnimLen;
-
-                fmod(f, 1.0);
-
                 float animMap_x = (vid + 0.5) * _AnimMap_TexelSize.x;
-                float animMap_y = f;
+                float animMap_y = fmod(_Time.y / _AnimLen, 1.0);
 
                 float4 pos = tex2Dlod(_AnimMap, float4(animMap_x, animMap_y, 0, 0));
 
+#if TEXTURE_COMPRESSION
+                pos.xyz = lerp(_PosRegionStart, _PosRegionEnd, pos.xyz);
+#endif
                 v2f o;
                 o.vertex = UnityObjectToClipPos(pos);
                 o.uv = TRANSFORM_TEX(v.uv, _MainTex);

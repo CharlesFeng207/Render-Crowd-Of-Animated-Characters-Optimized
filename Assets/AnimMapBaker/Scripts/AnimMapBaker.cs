@@ -93,16 +93,20 @@ public struct BakedData
     private readonly byte[] _rawAnimMap;
     private readonly int _animMapWidth;
     private readonly int _animMapHeight;
+    private readonly TextureFormat _textureFormat;
+    private readonly Bounds _bounds;
 
     #endregion
 
-    public BakedData(string name, float animLen, Texture2D animMap)
+    public BakedData(string name, float animLen, Texture2D animMap, TextureFormat textureFormat, Bounds bounds)
     {
         _name = name;
         _animLen = animLen;
         _animMapHeight = animMap.height;
         _animMapWidth = animMap.width;
         _rawAnimMap = animMap.GetRawTextureData();
+        _textureFormat = textureFormat;
+        _bounds = bounds;
     }
 
     public int AnimMapWidth => _animMapWidth;
@@ -114,6 +118,10 @@ public struct BakedData
     public byte[] RawAnimMap => _rawAnimMap;
 
     public int AnimMapHeight => _animMapHeight;
+
+    public TextureFormat TextureFormat => _textureFormat;
+
+    public Bounds Bounds => _bounds;
 }
 
 /// <summary>
@@ -127,12 +135,19 @@ public class AnimMapBaker{
     private Mesh _bakedMesh;
     private readonly List<Vector3> _vertices = new List<Vector3>();
     private readonly List<BakedData> _bakedDataList = new List<BakedData>();
-    private static float _samplingRate = 1f;
+    private float _samplingRate = 1f;
+    private bool _enableTextureCompression;
+    private Bounds _bounds;
 
     #endregion
 
     #region METHODS
 
+    public void SetEnableTextureCompression(bool enableTextureCompress)
+    {
+        _enableTextureCompression = enableTextureCompress;
+    }
+    
     public void SetSamplingRate(float samplingRate)
     {
         _samplingRate = samplingRate;
@@ -166,6 +181,7 @@ public class AnimMapBaker{
             return _bakedDataList;
         }
 
+
         //每一个动作都生成一个动作图
         foreach (var t in _animData.Value.AnimationClips)
         {
@@ -194,7 +210,8 @@ public class AnimMapBaker{
 
         perFrameTime = curAnim.length / curClipFrame;
 
-        var animMap = new Texture2D(_animData.Value.MapWidth, curClipFrame, TextureFormat.RGBAHalf, true);
+        var textureFormat = _enableTextureCompression ? TextureFormat.RGBA32 : TextureFormat.RGBAHalf;
+        var animMap = new Texture2D(_animData.Value.MapWidth, curClipFrame, textureFormat, true);
         animMap.name = string.Format($"{_animData.Value.Name}_{curAnim.name}.animMap");
         _animData.Value.AnimationPlay(curAnim.name);
 
@@ -205,9 +222,22 @@ public class AnimMapBaker{
             _animData.Value.SampleAnimAndBakeMesh(ref _bakedMesh);
 
             var vertices = _bakedMesh.vertices;
+
+            if (_enableTextureCompression)
+                CalculateBounds();
+
             for(var j = 0; j < _bakedMesh.vertexCount; j++)
             {
                 var vertex = vertices[j];
+
+                // Animation texture compression.
+                if (_enableTextureCompression)
+                {
+                    vertex.x = Mathf.InverseLerp(_bounds.min.x, _bounds.max.x, vertex.x);
+                    vertex.y = Mathf.InverseLerp(_bounds.min.y, _bounds.max.y, vertex.y);
+                    vertex.z = Mathf.InverseLerp(_bounds.min.z, _bounds.max.z, vertex.z);
+                }
+
                 animMap.SetPixel(j, i, new Color(vertex.x, vertex.y, vertex.z));
             }
 
@@ -215,7 +245,18 @@ public class AnimMapBaker{
         }
         animMap.Apply();
 
-        _bakedDataList.Add(new BakedData(animMap.name, curAnim.clip.length, animMap));
+        var data = new BakedData(animMap.name, curAnim.clip.length, animMap, textureFormat, _bounds);
+        _bakedDataList.Add(data);
+    }
+
+    private void CalculateBounds()
+    {
+        _bounds = new Bounds();
+        var vertices = _bakedMesh.vertices;
+        for(var i = 0; i < _bakedMesh.vertexCount; i++)
+        {
+            _bounds.Encapsulate(vertices[i]);
+        }
     }
 
     #endregion

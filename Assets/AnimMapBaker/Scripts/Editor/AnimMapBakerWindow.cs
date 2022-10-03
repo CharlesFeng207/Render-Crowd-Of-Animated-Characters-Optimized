@@ -35,9 +35,8 @@ public class AnimMapBakerWindow : EditorWindow {
     private static readonly int AnimMap = Shader.PropertyToID("_AnimMap");
     private static readonly int AnimLen = Shader.PropertyToID("_AnimLen");
     private bool _isShadowEnabled = false;
-
-    private static float _samplingRate = 1f;
-
+    private static bool _enableTextureCompression;
+    private float _samplingRate = 1f;
 
     #endregion
 
@@ -62,6 +61,7 @@ public class AnimMapBakerWindow : EditorWindow {
         _strategy = (SaveStrategy)EditorGUILayout.EnumPopup("Output Type:", _strategy);
 
         _samplingRate = EditorGUILayout.Slider("Sampling Rate", _samplingRate, 0f, 1f);
+        _enableTextureCompression = EditorGUILayout.Toggle("Texture Compression", _enableTextureCompression);
         _isShadowEnabled = EditorGUILayout.Toggle("Enable Shadow", _isShadowEnabled);
 
         if(_isShadowEnabled)
@@ -99,6 +99,7 @@ public class AnimMapBakerWindow : EditorWindow {
         }
 
         _baker.SetSamplingRate(_samplingRate);
+        _baker.SetEnableTextureCompression(_enableTextureCompression);
         _baker.SetAnimData(_targetGo);
 
         var list = _baker.Bake();
@@ -133,7 +134,7 @@ public class AnimMapBakerWindow : EditorWindow {
     private static Texture2D SaveAsAsset(ref BakedData data)
     {
         var folderPath = CreateFolder();
-        var animMap = new Texture2D(data.AnimMapWidth, data.AnimMapHeight, TextureFormat.RGBAHalf, false);
+        var animMap = new Texture2D(data.AnimMapWidth, data.AnimMapHeight, data.TextureFormat, false);
         animMap.LoadRawTextureData(data.RawAnimMap);
         AssetDatabase.CreateAsset(animMap, Path.Combine(folderPath, data.Name + ".asset"));
         return animMap;
@@ -159,6 +160,13 @@ public class AnimMapBakerWindow : EditorWindow {
         mat.SetTexture(MainTex, smr.sharedMaterial.mainTexture);
         mat.SetTexture(AnimMap, animMap);
         mat.SetFloat(AnimLen, data.AnimLen);
+
+        if (_enableTextureCompression)
+        {
+            mat.EnableKeyword("TEXTURE_COMPRESSION");
+            mat.SetVector("_PosRegionStart", data.Bounds.min);
+            mat.SetVector("_PosRegionEnd", data.Bounds.max);
+        }
 
         var folderPath = CreateFolder();
         AssetDatabase.CreateAsset(mat, Path.Combine(folderPath, $"{data.Name}.mat"));
