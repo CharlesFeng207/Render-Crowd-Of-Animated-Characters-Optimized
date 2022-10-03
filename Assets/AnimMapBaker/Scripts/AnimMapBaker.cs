@@ -127,10 +127,16 @@ public class AnimMapBaker{
     private Mesh _bakedMesh;
     private readonly List<Vector3> _vertices = new List<Vector3>();
     private readonly List<BakedData> _bakedDataList = new List<BakedData>();
+    private static float _samplingRate = 1f;
 
     #endregion
 
     #region METHODS
+
+    public void SetSamplingRate(float samplingRate)
+    {
+        _samplingRate = samplingRate;
+    }
 
     public void SetAnimData(GameObject go)
     {
@@ -180,8 +186,13 @@ public class AnimMapBaker{
         float sampleTime = 0;
         float perFrameTime = 0;
 
-        curClipFrame = Mathf.ClosestPowerOfTwo((int)(curAnim.clip.frameRate * curAnim.length));
-        perFrameTime = curAnim.length / curClipFrame; ;
+        // Keyframe interpolation
+        var originFrameCount = curAnim.clip.frameRate * curAnim.length;
+        curClipFrame = Mathf.ClosestPowerOfTwo((int)(originFrameCount * _samplingRate));
+
+        Debug.Log($"BakePerAnimClip {curAnim.clip.name} vertexCount:{_bakedMesh.vertexCount} frameCount:{originFrameCount} samepleFrameCount:{curClipFrame}");
+
+        perFrameTime = curAnim.length / curClipFrame;
 
         var animMap = new Texture2D(_animData.Value.MapWidth, curClipFrame, TextureFormat.RGBAHalf, true);
         animMap.name = string.Format($"{_animData.Value.Name}_{curAnim.name}.animMap");

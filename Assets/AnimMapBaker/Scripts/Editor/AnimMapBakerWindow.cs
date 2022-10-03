@@ -36,6 +36,9 @@ public class AnimMapBakerWindow : EditorWindow {
     private static readonly int AnimLen = Shader.PropertyToID("_AnimLen");
     private bool _isShadowEnabled = false;
 
+    private static float _samplingRate = 1f;
+
+
     #endregion
 
 
@@ -46,8 +49,6 @@ public class AnimMapBakerWindow : EditorWindow {
     {
         EditorWindow.GetWindow(typeof(AnimMapBakerWindow));
         _baker = new AnimMapBaker();
-        var shaderName = GraphicsSettings.renderPipelineAsset != null ? URPShader : BuiltInShader;
-        _animMapShader = Shader.Find(shaderName);
     }
 
     private void OnGUI()
@@ -60,7 +61,7 @@ public class AnimMapBakerWindow : EditorWindow {
 
         _strategy = (SaveStrategy)EditorGUILayout.EnumPopup("Output Type:", _strategy);
 
-
+        _samplingRate = EditorGUILayout.Slider("Sampling Rate", _samplingRate, 0f, 1f);
         _isShadowEnabled = EditorGUILayout.Toggle("Enable Shadow", _isShadowEnabled);
 
         if(_isShadowEnabled)
@@ -86,11 +87,18 @@ public class AnimMapBakerWindow : EditorWindow {
             return;
         }
 
+        if (_animMapShader == null)
+        {
+            var shaderName = GraphicsSettings.renderPipelineAsset != null ? URPShader : BuiltInShader;
+            _animMapShader = Shader.Find(shaderName);
+        }
+
         if(_baker == null)
         {
             _baker = new AnimMapBaker();
         }
 
+        _baker.SetSamplingRate(_samplingRate);
         _baker.SetAnimData(_targetGo);
 
         var list = _baker.Bake();
@@ -117,6 +125,7 @@ public class AnimMapBakerWindow : EditorWindow {
                 SaveAsPrefab(ref data);
                 break;
         }
+
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
     }
@@ -174,6 +183,9 @@ public class AnimMapBakerWindow : EditorWindow {
         var folderPath = CreateFolder();
         PrefabUtility.SaveAsPrefabAsset(go, Path.Combine(folderPath, $"{data.Name}.prefab")
             .Replace("\\", "/"));
+
+        // Clean temp GameObject
+        DestroyImmediate(go);
     }
 
     private static string CreateFolder()
