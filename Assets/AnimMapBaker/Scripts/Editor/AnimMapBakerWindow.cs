@@ -36,6 +36,8 @@ public class AnimMapBakerWindow : EditorWindow {
     private static readonly int AnimLen = Shader.PropertyToID("_AnimLen");
     private bool _isShadowEnabled = false;
     private static bool _enableTextureCompression;
+    private static bool _enableVertexCulling;
+    private static bool _enablePotTexture = true;
     private float _samplingRate = 1f;
 
     #endregion
@@ -62,6 +64,8 @@ public class AnimMapBakerWindow : EditorWindow {
 
         _samplingRate = EditorGUILayout.Slider("Sampling Rate", _samplingRate, 0f, 1f);
         _enableTextureCompression = EditorGUILayout.Toggle("Texture Compression", _enableTextureCompression);
+        _enableVertexCulling = EditorGUILayout.Toggle("Vertex Culling", _enableVertexCulling);
+        _enablePotTexture = EditorGUILayout.Toggle("POT Texture", _enablePotTexture);
         _isShadowEnabled = EditorGUILayout.Toggle("Enable Shadow", _isShadowEnabled);
 
         if(_isShadowEnabled)
@@ -100,6 +104,8 @@ public class AnimMapBakerWindow : EditorWindow {
 
         _baker.SetSamplingRate(_samplingRate);
         _baker.SetEnableTextureCompression(_enableTextureCompression);
+        _baker.SetEnableVertexCulling(_enableVertexCulling);
+        _baker.SetEnablePotTexture(_enablePotTexture);
         _baker.SetAnimData(_targetGo);
 
         var list = _baker.Bake();
@@ -168,6 +174,11 @@ public class AnimMapBakerWindow : EditorWindow {
             mat.SetVector("_PosRegionEnd", data.Bounds.max);
         }
 
+        if (_enableVertexCulling)
+        {
+            mat.EnableKeyword("VTX_CULLING");
+        }
+
         var folderPath = CreateFolder();
         AssetDatabase.CreateAsset(mat, Path.Combine(folderPath, $"{data.Name}.mat"));
 
@@ -184,11 +195,22 @@ public class AnimMapBakerWindow : EditorWindow {
             return;
         }
 
+        var folderPath = CreateFolder();
+
         var go = new GameObject();
         go.AddComponent<MeshRenderer>().sharedMaterial = mat;
-        go.AddComponent<MeshFilter>().sharedMesh = _targetGo.GetComponentInChildren<SkinnedMeshRenderer>().sharedMesh;
 
-        var folderPath = CreateFolder();
+        if (_enableVertexCulling)
+        {
+            var path = Path.Combine(folderPath, $"{_subPath}.asset").Replace("\\", "/");
+            var mesh = _baker.SaveAndGetBakedMesh(path);
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+        }
+        else
+        {
+            go.AddComponent<MeshFilter>().sharedMesh = _targetGo.GetComponentInChildren<SkinnedMeshRenderer>().sharedMesh;
+        }
+
         PrefabUtility.SaveAsPrefabAsset(go, Path.Combine(folderPath, $"{data.Name}.prefab")
             .Replace("\\", "/"));
 

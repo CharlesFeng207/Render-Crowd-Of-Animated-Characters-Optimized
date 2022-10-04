@@ -28,12 +28,14 @@ Shader "chenjd/BuiltIn/AnimMapShader"
             //开启gpu instancing
             #pragma multi_compile_instancing
             #pragma multi_compile _ TEXTURE_COMPRESSION
+            #pragma multi_compile _ VTX_CULLING
 
             #include "UnityCG.cginc"
 
             struct appdata
             {
                 float2 uv : TEXCOORD0;
+                float2 uv3 : TEXCOORD2;
                 float4 pos : POSITION;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
@@ -61,7 +63,13 @@ Shader "chenjd/BuiltIn/AnimMapShader"
             {
                 UNITY_SETUP_INSTANCE_ID(v);
 
-                float animMap_x = (vid + 0.5) * _AnimMap_TexelSize.x;
+#if VTX_CULLING
+                uint vindex = v.uv3.x;
+#else
+                uint vindex = vid;
+#endif
+
+                float animMap_x = (vindex + 0.5) * _AnimMap_TexelSize.x;
                 float animMap_y = fmod(_Time.y / _AnimLen, 1.0);
 
                 float4 pos = tex2Dlod(_AnimMap, float4(animMap_x, animMap_y, 0, 0));
@@ -78,7 +86,7 @@ Shader "chenjd/BuiltIn/AnimMapShader"
 				//o.uv = TRANSFORM_TEX(v.uv, _MainTex);
                 return o;
             }
-            
+
             fixed4 frag (v2f i) : SV_Target
             {
                 fixed4 col = tex2D(_MainTex, i.uv);

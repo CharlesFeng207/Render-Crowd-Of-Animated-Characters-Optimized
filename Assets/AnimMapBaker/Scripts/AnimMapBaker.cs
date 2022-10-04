@@ -17,28 +17,27 @@ public struct AnimData
 {
     #region FIELDS
 
-    private int _vertexCount;
-    private int _mapWidth;
     private readonly List<AnimationState> _animClips;
     private string _name;
+    private int _vertexCount;
 
     private  Animation _animation;
     private SkinnedMeshRenderer _skin;
 
     public List<AnimationState> AnimationClips => _animClips;
-    public int MapWidth => _mapWidth;
     public string Name => _name;
+    public int VertexCount => _vertexCount;
 
     #endregion
 
     public AnimData(Animation anim, SkinnedMeshRenderer smr, string goName)
     {
-        _vertexCount = smr.sharedMesh.vertexCount;
-        _mapWidth = Mathf.NextPowerOfTwo(_vertexCount);
         _animClips = new List<AnimationState>(anim.Cast<AnimationState>());
         _animation = anim;
         _skin = smr;
         _name = goName;
+
+        _vertexCount = smr.sharedMesh.vertexCount;
     }
 
     #region METHODS
@@ -94,11 +93,11 @@ public struct BakedData
     private readonly int _animMapWidth;
     private readonly int _animMapHeight;
     private readonly TextureFormat _textureFormat;
-    private readonly Bounds _bounds;
+    private Bounds _bounds;
 
     #endregion
 
-    public BakedData(string name, float animLen, Texture2D animMap, TextureFormat textureFormat, Bounds bounds)
+    public BakedData(string name, float animLen, Texture2D animMap, TextureFormat textureFormat)
     {
         _name = name;
         _animLen = animLen;
@@ -106,6 +105,11 @@ public struct BakedData
         _animMapWidth = animMap.width;
         _rawAnimMap = animMap.GetRawTextureData();
         _textureFormat = textureFormat;
+        _bounds = default;
+    }
+
+    public void SetBounds(Bounds bounds)
+    {
         _bounds = bounds;
     }
 
@@ -125,6 +129,66 @@ public struct BakedData
 }
 
 /// <summary>
+/// 剔除多余顶点
+/// </summary>
+public class VertexFilter
+{
+    private readonly List<int> _indexMap;
+    private readonly int _vertexCount;
+
+    public int VertexCount => _vertexCount;
+
+    public VertexFilter(Mesh mesh)
+    {
+        _indexMap = new List<int>(mesh.vertexCount);
+
+        var vertexMap = new Dictionary<Vector3, int>();
+        var vertices = mesh.vertices;
+        for (int i = 0; i < vertices.Length; i++)
+        {
+            if (vertexMap.TryGetValue(vertices[i], out var index))
+            {
+                _indexMap.Add(index);
+            }
+            else
+            {
+                _indexMap.Add(i);
+                vertexMap.Add(vertices[i], i);
+                _vertexCount++;
+            }
+        }
+    }
+
+    public Vector3[] GetVertices(Vector3[] vertices)
+    {
+        var indexSet = new HashSet<int>(_indexMap);
+        var list = new List<Vector3>(indexSet.Count);
+        for (var i = 0; i < vertices.Length; i++)
+        {
+            if(indexSet.Contains(i))
+                list.Add(vertices[i]);
+        }
+
+        return list.ToArray();
+    }
+
+    public void WriteToUV(Mesh mesh)
+    {
+        var indexSet = new HashSet<int>(_indexMap);
+        var indexList = indexSet.ToList();
+
+        var uv = new Vector2[mesh.vertexCount];
+        for (var i = 0; i < uv.Length; i++)
+        {
+            var newIndex = indexList.IndexOf(_indexMap[i]);
+            uv[i].x = newIndex;
+        }
+
+        mesh.uv3 = uv;
+    }
+}
+
+/// <summary>
 /// 烘焙器
 /// </summary>
 public class AnimMapBaker{
@@ -137,11 +201,36 @@ public class AnimMapBaker{
     private readonly List<BakedData> _bakedDataList = new List<BakedData>();
     private float _samplingRate = 1f;
     private bool _enableTextureCompression;
+    private bool _enableVertexCulling;
+    private bool _enablePotTexture;
     private Bounds _bounds;
+    private VertexFilter _vertexFilter;
+    private bool _bakedMeshSaved;
 
     #endregion
 
     #region METHODS
+
+
+    public Mesh SaveAndGetBakedMesh(string path)
+    {
+        if (_bakedMeshSaved) return _bakedMesh;
+        _vertexFilter.WriteToUV(_bakedMesh);
+        AssetDatabase.CreateAsset(_bakedMesh, path);
+        _bakedMeshSaved = true;
+
+        return _bakedMesh;
+    }
+
+    public void SetEnablePotTexture(bool enablePotTexture)
+    {
+        _enablePotTexture = enablePotTexture;
+    }
+
+    public void SetEnableVertexCulling(bool enableVertexCulling)
+    {
+        _enableVertexCulling = enableVertexCulling;
+    }
 
     public void SetEnableTextureCompression(bool enableTextureCompress)
     {
@@ -170,7 +259,9 @@ public class AnimMapBaker{
             return;
         }
         _bakedMesh = new Mesh();
+        _bakedMeshSaved = false;
         _animData = new AnimData(anim, smr, go.name);
+        _vertexFilter = new VertexFilter(smr.sharedMesh);
     }
 
     public List<BakedData> Bake()
@@ -204,14 +295,20 @@ public class AnimMapBaker{
 
         // Keyframe interpolation
         var originFrameCount = curAnim.clip.frameRate * curAnim.length;
-        curClipFrame = Mathf.ClosestPowerOfTwo((int)(originFrameCount * _samplingRate));
+        curClipFrame = (int)(originFrameCount * _samplingRate);
+        if (_enablePotTexture) curClipFrame = Mathf.ClosestPowerOfTwo(curClipFrame);
 
-        Debug.Log($"BakePerAnimClip {curAnim.clip.name} vertexCount:{_bakedMesh.vertexCount} frameCount:{originFrameCount} samepleFrameCount:{curClipFrame}");
 
         perFrameTime = curAnim.length / curClipFrame;
 
         var textureFormat = _enableTextureCompression ? TextureFormat.RGBA32 : TextureFormat.RGBAHalf;
-        var animMap = new Texture2D(_animData.Value.MapWidth, curClipFrame, textureFormat, true);
+
+        var mapWidth = _enableVertexCulling ? _vertexFilter.VertexCount : _animData.Value.VertexCount;
+        if (_enablePotTexture) mapWidth = Mathf.NextPowerOfTwo(mapWidth);
+
+        Debug.Log($"BakePerAnimClip {curAnim.clip.name} {mapWidth}x{curClipFrame}");
+
+        var animMap = new Texture2D(mapWidth, curClipFrame, textureFormat, true);
         animMap.name = string.Format($"{_animData.Value.Name}_{curAnim.name}.animMap");
         _animData.Value.AnimationPlay(curAnim.name);
 
@@ -223,10 +320,13 @@ public class AnimMapBaker{
 
             var vertices = _bakedMesh.vertices;
 
+            if (_enableVertexCulling)
+                vertices = _vertexFilter.GetVertices(vertices);
+
             if (_enableTextureCompression)
                 CalculateBounds();
 
-            for(var j = 0; j < _bakedMesh.vertexCount; j++)
+            for(var j = 0; j < vertices.Length; j++)
             {
                 var vertex = vertices[j];
 
@@ -245,7 +345,8 @@ public class AnimMapBaker{
         }
         animMap.Apply();
 
-        var data = new BakedData(animMap.name, curAnim.clip.length, animMap, textureFormat, _bounds);
+        var data = new BakedData(animMap.name, curAnim.clip.length, animMap, textureFormat);
+        data.SetBounds(_bounds);
         _bakedDataList.Add(data);
     }
 
