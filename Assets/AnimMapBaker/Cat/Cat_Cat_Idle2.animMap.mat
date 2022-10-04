@@ -1,0 +1,35 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!21 &2100000
+Material:
+  serializedVersion: 6
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: Cat_Cat_Idle2.animMap
+  m_Shader: {fileID: 4800000, guid: a29e7330fcdae8849bd07e990b12f5de, type: 3}
+  m_ShaderKeywords: TEXTURE_COMPRESSION VTX_CULLING
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: -1
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs:
+    - _AnimMap:
+        m_Texture: {fileID: 2800000, guid: 744425654c61e7d418a1b93335804233, type: 2}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _MainTex:
+        m_Texture: {fileID: 2800000, guid: 1dde8fb2f7d6df74a84e5967afe3417a, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    m_Floats:
+    - _AnimLen: 4.666667
+    m_Colors:
+    - _PosRegionEnd: {r: 0.47548217, g: 1.1729811, b: 0.26548505, a: 0}
+    - _PosRegionStart: {r: -0.18520163, g: 0, b: -0.22720905, a: 0}
+  m_BuildTextureStacks: []
