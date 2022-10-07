@@ -296,6 +296,8 @@ public class AnimMapBaker{
         // Keyframe interpolation
         var originFrameCount = curAnim.clip.frameRate * curAnim.length;
         curClipFrame = (int)(originFrameCount * _samplingRate);
+        Debug.Log($"Keyframe interpolation: {curAnim.clip.name} {originFrameCount}->{curClipFrame}");
+
         if (_enablePotTexture) curClipFrame = Mathf.ClosestPowerOfTwo(curClipFrame);
 
 
@@ -312,37 +314,50 @@ public class AnimMapBaker{
         animMap.name = string.Format($"{_animData.Value.Name}_{curAnim.name}.animMap");
         _animData.Value.AnimationPlay(curAnim.name);
 
+        var allVertices = new List<Vector3>();
+        _bounds = new Bounds();
         for (var i = 0; i < curClipFrame; i++)
         {
             curAnim.time = sampleTime;
 
             _animData.Value.SampleAnimAndBakeMesh(ref _bakedMesh);
 
+            CalculateBounds();
+
             var vertices = _bakedMesh.vertices;
 
             if (_enableVertexCulling)
                 vertices = _vertexFilter.GetVertices(vertices);
 
-            if (_enableTextureCompression)
-                CalculateBounds();
-
-            for(var j = 0; j < vertices.Length; j++)
-            {
-                var vertex = vertices[j];
-
-                // Animation texture compression.
-                if (_enableTextureCompression)
-                {
-                    vertex.x = Mathf.InverseLerp(_bounds.min.x, _bounds.max.x, vertex.x);
-                    vertex.y = Mathf.InverseLerp(_bounds.min.y, _bounds.max.y, vertex.y);
-                    vertex.z = Mathf.InverseLerp(_bounds.min.z, _bounds.max.z, vertex.z);
-                }
-
-                animMap.SetPixel(j, i, new Color(vertex.x, vertex.y, vertex.z));
-            }
+            var tempList = vertices.ToList();
+            while (tempList.Count < mapWidth) tempList.Add(Vector3.zero);
+            allVertices.AddRange(tempList);
 
             sampleTime += perFrameTime;
         }
+
+        Color[] pixels;
+
+        // Animation texture compression.
+        if (_enableTextureCompression)
+        {
+            pixels = allVertices.Select(v =>
+            {
+                var color = new Color
+                {
+                    r = Mathf.InverseLerp(_bounds.min.x, _bounds.max.x, v.x),
+                    g = Mathf.InverseLerp(_bounds.min.y, _bounds.max.y, v.y),
+                    b = Mathf.InverseLerp(_bounds.min.z, _bounds.max.z, v.z)
+                };
+                return color;
+            }).ToArray();
+        }
+        else
+        {
+            pixels = allVertices.Select(x => new Color(x.x, x.y, x.z)).ToArray();
+        }
+
+        animMap.SetPixels(0,0, mapWidth, curClipFrame, pixels);
         animMap.Apply();
 
         var data = new BakedData(animMap.name, curAnim.clip.length, animMap, textureFormat);
@@ -352,7 +367,6 @@ public class AnimMapBaker{
 
     private void CalculateBounds()
     {
-        _bounds = new Bounds();
         var vertices = _bakedMesh.vertices;
         for(var i = 0; i < _bakedMesh.vertexCount; i++)
         {
